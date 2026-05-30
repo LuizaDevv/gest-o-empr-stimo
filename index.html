@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gestão de Empréstimos SaaS</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e', 800: '#115e59', 900: '#134e4a' },
+                        surface: { light: '#ffffff', dark: '#0f172a', darkHover: '#1e293b' }
+                    },
+                    boxShadow: { 'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.05)', 'glass-dark': '0 8px 32px 0 rgba(0, 0, 0, 0.3)' }
+                }
+            }
+        }
+    </script>
+
+    <!-- Icons (Phosphor Icons) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body { background-color: #f8fafc; overflow-x: hidden; }
+        .dark body { background-color: #0f172a; color: #f1f5f9; }
+        
+        /* Smooth Page Transitions */
+        .page-enter { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Glass Cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .dark .glass-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Hide scrollbar for clean UI */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Custom Range Slider */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #0d9488; cursor: pointer; margin-top: -8px; box-shadow: 0 2px 6px rgba(13, 148, 136, 0.4); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; cursor: pointer; background: #e2e8f0; border-radius: 4px; }
+        .dark input[type=range]::-webkit-slider-runnable-track { background: #334155; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased h-screen flex flex-col transition-colors duration-300 relative">
+
+    <!-- App Container -->
+    <main id="app-content" class="flex-1 overflow-y-auto overflow-x-hidden pb-24 relative no-scrollbar"></main>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 glass-card border-t border-slate-200 dark:border-slate-800 pb-safe z-40 px-2 pb-2 pt-1 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] dark:shadow-none">
+        <div class="flex justify-around items-center h-16 max-w-md mx-auto">
+            <button onclick="App.navigate('dashboard')" id="nav-dashboard" class="flex flex-col items-center justify-center w-full space-y-1 text-slate-400 hover:text-brand-600 transition-colors">
+                <i class="ph ph-squares-four text-2xl nav-icon"></i>
+                <span class="text-[10px] font-semibold">Visão</span>
+            </button>
+            <button onclick="App.navigate('banks')" id="nav-banks" class="flex flex-col items-center justify-center w-full space-y-1 text-slate-400 hover:text-brand-600 transition-colors">
+                <i class="ph ph-bank text-2xl nav-icon"></i>
+                <span class="text-[10px] font-semibold">Bancos</span>
+            </button>
+            <button onclick="App.navigate('calendar')" id="nav-calendar" class="flex flex-col items-center justify-center w-full space-y-1 text-slate-400 hover:text-brand-600 transition-colors">
+                <i class="ph ph-calendar-blank text-2xl nav-icon"></i>
+                <span class="text-[10px] font-semibold">Agenda</span>
+            </button>
+            <button onclick="App.navigate('settings')" id="nav-settings" class="flex flex-col items-center justify-center w-full space-y-1 text-slate-400 hover:text-brand-600 transition-colors">
+                <i class="ph ph-gear text-2xl nav-icon"></i>
+                <span class="text-[10px] font-semibold">Ajustes</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Global Dialog/Modal Root -->
+    <div id="dialog-root" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 backdrop-blur-sm opacity-0 transition-opacity duration-300 p-4">
+        <div id="dialog-content" class="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-sm p-6 transform scale-95 transition-transform duration-300">
+            <div id="dialog-icon" class="w-12 h-12 rounded-full mb-4 flex items-center justify-center mx-auto text-2xl"></div>
+            <h3 id="dialog-title" class="text-xl font-bold text-center text-slate-900 dark:text-white mb-2"></h3>
+            <p id="dialog-message" class="text-center text-slate-500 dark:text-slate-400 text-sm mb-6"></p>
+            <div id="dialog-actions" class="flex gap-3"></div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Sub-Views Container (Overlays) -->
+    <div id="overlay-root"></div>
+
+    <script>
+        // --- Utility Functions ---
+        const Format = {
+            brl: (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+            date: (d) => {
+                if (!d) return '';
+                const date = new Date(d);
+                return date.toLocaleDateString('pt-BR');
+            },
+            monthYear: (d) => {
+                const date = new Date(d);
+                const str = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                return str.charAt(0).toUpperCase() + str.slice(1);
+            },
+            id: () => Math.random().toString(36).substr(2, 9)
+        };
+
+        const Parse = {
+            dateBR: (s) => {
+                if (!s) return null;
+                const parts = s.includes('-') ? s.split('-') : s.split('/');
+                if (parts.length !== 3) return null;
+                return s.includes('-') ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(parts[2], parts[1] - 1, parts[0]);
+            }
+        };
+
+        // --- Core Application Logic & State ---
+        const App = {
+            state: {
+                tab: 'dashboard',
+                contracts: [],
+                activeBank: null,
+                activeContract: null,
+                darkMode: false,
+                chartInstance: null
+            },
+
+            init() {
+                this.loadData();
+                this.applyTheme();
+                this.navigate('dashboard');
+                window.addEventListener('resize', () => {
+                    if (this.state.tab === 'dashboard') this.renderDashboard();
+                });
+            },
+
+            loadData() {
+                const stored = localStorage.getItem('saas_emprestimos_data');
+                const theme = localStorage.getItem('saas_theme_dark');
+                this.state.darkMode = theme === 'true';
+
+                if (stored) {
+                    this.state.contracts = JSON.parse(stored);
+                } else {
+                    this.state.contracts = this.generateSeedData();
+                    this.saveData();
+                }
+            },
+
+            saveData() {
+                localStorage.setItem('saas_emprestimos_data', JSON.stringify(this.state.contracts));
+            },
+
+            applyTheme() {
+                if (this.state.darkMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+                localStorage.setItem('saas_theme_dark', this.state.darkMode);
+            },
+
+            toggleTheme() {
+                this.state.darkMode = !this.state.darkMode;
+                this.applyTheme();
+                this.renderSettings(); // Re-render to update toggle switch
+                if(this.state.tab === 'dashboard') this.renderDashboard(); // Update chart colors
+            },
+
+            // Custom replacement for window.confirm/alert
+            showDialog({ title, message, type = 'info', confirmText = 'OK', cancelText = null, onConfirm = null }) {
+                const root = document.getElementById('dialog-root');
+                const content = document.getElementById('dialog-content');
+                const icon = document.getElementById('dialog-icon');
+                const actions = document.getElementById('dialog-actions');
+
+                document.getElementById('dialog-title').innerText = title;
+                document.getElementById('dialog-message').innerText = message;
+
+                // Configure Icon and Colors based on type
+                if (type === 'danger') {
+                    icon.className = 'w-16 h-16 rounded-full mb-4 flex items-center justify-center mx-auto text-3xl bg-rose-100 text-rose-600 dark:bg-rose-900/30';
+                    icon.innerHTML = '<i class="ph-fill ph-warning-circle"></i>';
+                } else if (type === 'success') {
+                    icon.className = 'w-16 h-16 rounded-full mb-4 flex items-center justify-center mx-auto text-3xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30';
+                    icon.innerHTML = '<i class="ph-fill ph-check-circle"></i>';
+                } else {
+                    icon.className = 'w-16 h-16 rounded-full mb-4 flex items-center justify-center mx-auto text-3xl bg-brand-100 text-brand-600 dark:bg-brand-900/30';
+                    icon.innerHTML = '<i class="ph-fill ph-info"></i>';
+                }
+
+                actions.innerHTML = '';
+                if (cancelText) {
+                    const btnCancel = document.createElement('button');
+                    btnCancel.className = 'flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold rounded-2xl transition-colors';
+                    btnCancel.innerText = cancelText;
+                    btnCancel.onclick = () => { this.closeDialog(); };
+                    actions.appendChild(btnCancel);
+                }
+
+                const btnConfirm = document.createElement('button');
+                btnConfirm.className = `flex-1 py-3 px-4 font-semibold rounded-2xl transition-transform active:scale-95 text-white ${type === 'danger' ? 'bg-rose-500 shadow-rose-500/30' : 'bg-brand-600 shadow-brand-600/30'} shadow-lg`;
+                btnConfirm.innerText = confirmText;
+                btnConfirm.onclick = () => { 
+                    this.closeDialog(); 
+                    if (onConfirm) onConfirm(); 
+                };
+                actions.appendChild(btnConfirm);
+
+                root.classList.remove('hidden');
+                // Small delay to allow display:block to apply before animating opacity
+                setTimeout(() => {
+                    root.classList.remove('opacity-0');
+                    content.classList.remove('scale-95');
+                }, 10);
+            },
+
+            closeDialog() {
+                const root = document.getElementById('dialog-root');
+                const content = document.getElementById('dialog-content');
+                root.classList.add('opacity-0');
+                content.classList.add('scale-95');
+                setTimeout(() => { root.classList.add('hidden'); }, 300);
+            },
+
+            // Navigation Router
+            navigate(tab) {
+                this.state.tab = tab;
+                this.state.activeBank = null; // reset sub-views
+
+                // Update Nav UI
+                document.querySelectorAll('nav button').forEach(btn => {
+                    btn.classList.remove('text-brand-600');
+                    btn.classList.add('text-slate-400');
+                    btn.querySelector('i').classList.remove('ph-fill');
+                });
+                const activeBtn = document.getElementById(`nav-${tab}`);
+                if (activeBtn) {
+                    activeBtn.classList.remove('text-slate-400');
+                    activeBtn.classList.add('text-brand-600');
+                    activeBtn.querySelector('i').classList.add('ph-fill');
+                }
+
+                // Render Content
+                const content = document.getElementById('app-content');
+                content.innerHTML = '';
+                
+                if (tab === 'dashboard') this.renderDashboard();
+                if (tab === 'banks') this.renderBanks();
+                if (tab === 'calendar') this.renderCalendar();
+                if (tab === 'settings') this.renderSettings();
+            },
+
+            // --- Smart Calculators ---
+            getInsights() {
+                const now = new Date();
+                let totalRestante = 0;
+                let totalPago = 0;
+                let compromissoMes = 0;
+                let parcelasAtrasadas = 0;
+                let maxDataVencimento = new Date(0);
+                
+                // For burndown chart
+                const timeline = {};
+
+                this.state.contracts.forEach(c => {
+                    c.installments.forEach(inst => {
+                        const dueDate = new Date(inst.vencimento);
+                        
+                        if (inst.status === 'paga') {
+                            totalPago += Number(inst.valorPago || inst.valorEsperado);
+                        } else {
+                            const debt = Number(inst.valorEsperado) - (Number(inst.valorPago) || 0);
+                            totalRestante += debt;
+                            
+                            if (inst.status === 'atrasada') parcelasAtrasadas++;
+                            if (dueDate.getMonth() === now.getMonth() && dueDate.getFullYear() === now.getFullYear()) {
+                                compromissoMes += debt;
+                            }
+                            if (dueDate > maxDataVencimento) maxDataVencimento = dueDate;
+
+                            // Aggregating future debt for chart
+                            const monthKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth()+1).padStart(2,'0')}`;
+                            if (!timeline[monthKey]) timeline[monthKey] = 0;
+                            timeline[monthKey] += debt;
+                        }
+                    });
+                });
+
+                // Calculate estimated payoff date (Livre das Dívidas)
+                let livreDateStr = maxDataVencimento > now ? Format.monthYear(maxDataVencimento) : 'Já quitado!';
+
+                // Find the "worst" contract to pay off first (Avalanche hint logic: highest remaining value / months)
+                let prioritario = null;
+                let highestImpact = -1;
+
+                this.state.contracts.forEach(c => {
+                    const pendentes = c.installments.filter(i => i.status !== 'paga');
+                    if (pendentes.length > 0) {
+                        const totalDebt = pendentes.reduce((acc, i) => acc + Number(i.valorEsperado), 0);
+                        // Metric: Liberates the most cashflow per month sooner
+                        const impact = Number(c.valorParcela) / pendentes.length; 
+                        if (impact > highestImpact) {
+                            highestImpact = impact;
+                            prioritario = { banco: c.banco, valorParcela: c.valorParcela, restante: totalDebt };
+                        }
+                    }
+                });
+
+                return { totalRestante, totalPago, compromissoMes, parcelasAtrasadas, livreDateStr, timeline, prioritario };
+            },
+
+            renderDashboard() {
+                const container = document.getElementById('app-content');
+                const insights = this.getInsights();
+                
+                let chartHTML = '';
+                if (insights.totalRestante > 0) {
+                    chartHTML = `
+                        <div class="glass-card rounded-3xl p-5 mb-6 shadow-glass dark:shadow-none relative">
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-4">Projeção de Quitação</h3>
+                            <div class="h-40 w-full relative">
+                                <canvas id="burndownChart"></canvas>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                let priorityHTML = '';
+                if (insights.prioritario) {
+                    priorityHTML = `
+                        <div class="bg-gradient-to-r from-brand-600 to-emerald-500 rounded-3xl p-5 mb-6 text-white shadow-lg shadow-brand-500/20 relative overflow-hidden">
+                            <i class="ph-fill ph-sparkle text-white/20 text-6xl absolute -top-2 -right-2"></i>
+                            <div class="flex items-center gap-2 mb-2">
+                                <i class="ph-fill ph-lightbulb text-brand-200"></i>
+                                <span class="text-xs font-bold uppercase tracking-wider text-brand-100">Dica Inteligente</span>
+                            </div>
+                            <p class="text-sm leading-relaxed text-brand-50 mb-3">
+                                Foque em quitar o <strong>${insights.prioritario.banco}</strong> primeiro. Isso liberará <strong>${Format.brl(insights.prioritario.valorParcela)}</strong> do seu orçamento mensal mais rapidamente.
+                            </p>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = `
+                    <div class="p-5 pt-8 page-enter">
+                        <header class="mb-6 flex justify-between items-end">
+                            <div>
+                                <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Dashboard</h1>
+                                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Análise financeira em tempo real</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800/50">
+                                <i class="ph-fill ph-trend-down text-xl"></i>
+                            </div>
+                        </header>
+
+                        <!-- Main KPI Widget -->
+                        <div class="glass-card rounded-3xl p-6 mb-4 shadow-glass dark:shadow-none border-t-4 border-t-brand-500">
+                            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Saldo Devedor Total</p>
+                            <h2 class="text-4xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">${Format.brl(insights.totalRestante)}</h2>
+                            
+                            <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-100 dark:border-slate-700">
+                                <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                                    <i class="ph-fill ph-calendar-check text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-[10px] uppercase font-bold text-slate-400">Previsão Livre de Dívidas</p>
+                                    <p class="text-sm font-bold text-slate-800 dark:text-white capitalize">${insights.livreDateStr}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div class="glass-card p-4 rounded-3xl shadow-glass dark:shadow-none">
+                                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-2">
+                                    <i class="ph-fill ph-calendar-x"></i>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider">Mês Atual</span>
+                                </div>
+                                <p class="text-lg font-black text-slate-900 dark:text-white">${Format.brl(insights.compromissoMes)}</p>
+                            </div>
+                            
+                            <div class="glass-card p-4 rounded-3xl shadow-glass dark:shadow-none ${insights.parcelasAtrasadas > 0 ? 'bg-rose-50/50 border-rose-200 dark:bg-rose-900/10 dark:border-rose-800' : ''}">
+                                <div class="flex items-center gap-2 ${insights.parcelasAtrasadas > 0 ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'} mb-2">
+                                    <i class="ph-fill ph-warning-circle"></i>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider">Atrasadas</span>
+                                </div>
+                                <p class="text-lg font-black ${insights.parcelasAtrasadas > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}">
+                                    ${insights.parcelasAtrasadas} parcelas
+                                </p>
+                            </div>
+                        </div>
+
+                        ${priorityHTML}
+                        ${chartHTML}
+                    </div>
+                `;
+
+                // Render Chart if elements exist
+                if (insights.totalRestante > 0) {
+                    this.renderChart(insights.timeline);
+                }
+            },
+
+            renderChart(timelineData) {
+                const ctx = document.getElementById('burndownChart');
+                if (!ctx) return;
+
+                if (this.state.chartInstance) {
+                    this.state.chartInstance.destroy();
+                }
+
+                // Sort keys and calculate cumulative debt decreasing
+                const sortedMonths = Object.keys(timelineData).sort();
+                const labels = [];
+                const dataPoints = [];
+                let runningDebt = 0;
+                
+                // Calculate total to burn down
+                Object.values(timelineData).forEach(v => runningDebt += v);
+
+                // Limit to next 12 months for visual clarity
+                const limit = Math.min(12, sortedMonths.length);
+                for (let i = 0; i < limit; i++) {
+                    const m = sortedMonths[i];
+                    const [year, month] = m.split('-');
+                    const date = new Date(year, month - 1);
+                    labels.push(date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('. de ', '/'));
+                    dataPoints.push(runningDebt);
+                    runningDebt -= timelineData[m]; // subtract this month's payment
+                }
+
+                const isDark = document.documentElement.classList.contains('dark');
+                const textColor = isDark ? '#94a3b8' : '#64748b';
+                const gridColor = isDark ? '#334155' : '#e2e8f0';
+
+                this.state.chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Saldo Devedor',
+                            data: dataPoints,
+                            borderColor: '#0d9488', // brand-600
+                            backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                            borderWidth: 3,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#0d9488',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            fill: true,
+                            tension: 0.4 // Smooth curves like modern SaaS
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: isDark ? '#1e293b' : '#fff',
+                                titleColor: isDark ? '#fff' : '#0f172a',
+                                bodyColor: isDark ? '#cbd5e1' : '#475569',
+                                borderColor: gridColor,
+                                borderWidth: 1,
+                                padding: 10,
+                                displayColors: false,
+                                callbacks: {
+                                    label: (ctx) => Format.brl(ctx.raw)
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                border: { display: false },
+                                grid: { color: gridColor, drawTicks: false },
+                                ticks: {
+                                    color: textColor,
+                                    font: { family: 'Inter', size: 10 },
+                                    callback: (value) => 'R$ ' + (value/1000) + 'k'
+                                }
+                            },
+                            x: {
+                                border: { display: false },
+                                grid: { display: false },
+                                ticks: { color: textColor, font: { family: 'Inter', size: 10 } }
+                            }
+                        }
+                    }
+                });
+            },
+
+            renderBanks() {
+                const container = document.getElementById('app-content');
+                
+                // Agrupar por banco
+                const grouped = {};
+                this.state.contracts.forEach(c => {
+                    if (!grouped[c.banco]) grouped[c.banco] = { count: 0, debt: 0, name: c.banco };
+                    grouped[c.banco].count++;
+                    
+                    const pago = c.installments.filter(i => i.status === 'paga').reduce((acc, i) => acc + Number(i.valorPago || i.valorEsperado), 0);
+                    const total = Number(c.valorContrato) || (c.parcelas * c.valorParcela);
+                    grouped[c.banco].debt += Math.max(0, total - pago);
+                });
+
+                const banks = Object.values(grouped).sort((a, b) => b.debt - a.debt); // Sort by highest debt
+
+                let listHTML = banks.map(b => `
+                    <div onclick="App.renderBankContracts('${b.name}')" class="glass-card p-4 rounded-3xl shadow-sm mb-3 flex items-center justify-between cursor-pointer hover:border-brand-300 transition-colors active:scale-[0.98]">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center text-brand-600 dark:text-brand-400">
+                                <i class="ph-fill ph-bank text-2xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-slate-900 dark:text-white">${b.name}</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">${b.count} contrato(s)</p>
+                            </div>
+                        </div>
+                        <div class="text-right flex flex-col items-end">
+                            <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Dívida</p>
+                            <p class="font-black text-slate-800 dark:text-white">${Format.brl(b.debt)}</p>
+                        </div>
+                    </div>
+                `).join('');
+
+                if (banks.length === 0) {
+                    listHTML = `
+                        <div class="text-center p-10 text-slate-400 flex flex-col items-center">
+                            <i class="ph-fill ph-wallet text-6xl mb-4 opacity-20"></i>
+                            <p>Nenhum banco cadastrado.</p>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = `
+                    <div class="p-5 pt-8 page-enter">
+                        <header class="mb-6">
+                            <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Meus Bancos</h1>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Organizado por instituição</p>
+                        </header>
+                        <div class="space-y-1">
+                            ${listHTML}
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderBankContracts(bankName) {
+                const container = document.getElementById('app-content');
+                const contracts = this.state.contracts.filter(c => c.banco === bankName);
+
+                let listHTML = contracts.map(c => {
+                    const totalInst = c.parcelas;
+                    const paidInst = c.installments.filter(i => i.status === 'paga').length;
+                    const hasOverdue = c.installments.some(i => i.status === 'atrasada');
+                    const progress = (paidInst / totalInst) * 100;
+
+                    let badge = `<span class="bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">Em Dia</span>`;
+                    if (hasOverdue) badge = `<span class="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">Atrasado</span>`;
+                    if (paidInst === totalInst) badge = `<span class="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">Quitado</span>`;
+
+                    return `
+                        <div onclick="App.openContract('${c.id}')" class="glass-card p-5 rounded-3xl shadow-sm mb-4 cursor-pointer hover:border-brand-300 transition-colors active:scale-[0.98] border border-slate-100 dark:border-slate-800">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 class="font-bold text-slate-900 dark:text-white leading-tight">${c.produto || 'Empréstimo'}</h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Contrato: ${c.contrato}</p>
+                                </div>
+                                ${badge}
+                            </div>
+                            
+                            <div class="flex justify-between items-end">
+                                <div class="w-1/2">
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">Progresso (${paidInst}/${totalInst})</p>
+                                    <div class="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div class="h-full ${hasOverdue ? 'bg-rose-500' : 'bg-brand-500'} rounded-full transition-all duration-1000" style="width: ${progress}%"></div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Parcela</p>
+                                    <p class="font-black text-slate-800 dark:text-white text-lg">${Format.brl(c.valorParcela)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                container.innerHTML = `
+                    <div class="p-5 pt-8 page-enter">
+                        <header class="mb-6 flex items-center gap-4">
+                            <button onclick="App.renderBanks()" class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-95 transition-transform">
+                                <i class="ph ph-arrow-left text-xl"></i>
+                            </button>
+                            <div>
+                                <h1 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">${bankName}</h1>
+                                <p class="text-sm text-slate-500 mt-0.5">${contracts.length} contrato(s)</p>
+                            </div>
+                        </header>
+                        <div>${listHTML}</div>
+                    </div>
+                `;
+            },
+
+            renderCalendar() {
+                const container = document.getElementById('app-content');
+                let items = [];
+                this.state.contracts.forEach(c => {
+                    c.installments.forEach(i => {
+                        items.push({ ...i, banco: c.banco, contratoName: c.contrato });
+                    });
+                });
+                
+                // Only show upcoming/recent, sort by date
+                const now = new Date();
+                const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+                
+                items = items.filter(i => new Date(i.vencimento) >= threeMonthsAgo)
+                             .sort((a,b) => new Date(a.vencimento) - new Date(b.vencimento));
+
+                const grouped = {};
+                items.forEach(inst => {
+                    const month = Format.monthYear(inst.vencimento);
+                    if (!grouped[month]) grouped[month] = [];
+                    grouped[month].push(inst);
+                });
+
+                let listHTML = '';
+                Object.entries(grouped).forEach(([month, insts]) => {
+                    listHTML += `<h3 class="font-bold text-slate-800 dark:text-white mt-6 mb-3 sticky top-0 bg-[#f8fafc]/90 dark:bg-[#0f172a]/90 backdrop-blur-md py-2 z-10">${month}</h3><div class="space-y-3">`;
+                    
+                    insts.forEach(inst => {
+                        const isPaid = inst.status === 'paga';
+                        const isLate = inst.status === 'atrasada';
+                        const dateNum = new Date(inst.vencimento).getDate();
+                        
+                        const colorClass = isPaid ? 'bg-emerald-500' : isLate ? 'bg-rose-500' : 'bg-amber-400';
+                        const bgClass = isPaid ? 'opacity-60' : 'glass-card border border-slate-100 dark:border-slate-800';
+                        const textClass = isPaid ? 'text-slate-400 line-through' : isLate ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white';
+                        const statusBadge = isPaid ? 'Paga' : isLate ? 'Atrasada' : 'Pendente';
+                        const badgeColor = isPaid ? 'text-emerald-500' : isLate ? 'text-rose-500' : 'text-amber-500';
+
+                        listHTML += `
+                            <div class="p-3 rounded-2xl flex items-center justify-between ${bgClass}">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-1.5 h-10 rounded-full ${colorClass}"></div>
+                                    <div>
+                                        <p class="font-bold text-sm text-slate-800 dark:text-white leading-tight">${inst.banco}</p>
+                                        <p class="text-[11px] text-slate-500 font-medium">Dia ${dateNum} • Parc. ${inst.numero}</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-black text-sm ${textClass}">${Format.brl(inst.valorEsperado)}</p>
+                                    <p class="text-[9px] uppercase font-bold tracking-wider mt-0.5 ${badgeColor}">${statusBadge}</p>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    listHTML += `</div>`;
+                });
+
+                container.innerHTML = `
+                    <div class="p-5 pt-8 page-enter">
+                        <header class="mb-4">
+                            <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Timeline</h1>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Sua agenda de pagamentos</p>
+                        </header>
+                        <div class="pb-6">
+                            ${listHTML || '<p class="text-center text-slate-400 mt-10">Nenhum vencimento recente.</p>'}
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderSettings() {
+                const container = document.getElementById('app-content');
+                container.innerHTML = `
+                    <div class="p-5 pt-8 page-enter">
+                        <header class="mb-8">
+                            <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Ajustes</h1>
+                        </header>
+
+                        <div class="glass-card rounded-3xl overflow-hidden mb-6 divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800">
+                            <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onclick="App.toggleTheme()">
+                                <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                        <i class="ph-fill ${this.state.darkMode ? 'ph-moon' : 'ph-sun'} text-xl"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Modo Escuro</span>
+                                </div>
+                                <div class="w-12 h-6 rounded-full transition-colors relative ${this.state.darkMode ? 'bg-brand-500' : 'bg-slate-200 dark:bg-slate-700'}">
+                                    <div class="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${this.state.darkMode ? 'left-7' : 'left-1'} shadow-sm"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onclick="App.exportData()">
+                                <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                        <i class="ph-fill ph-download-simple text-xl text-brand-500"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Exportar Backup</span>
+                                </div>
+                                <i class="ph ph-caret-right text-slate-400"></i>
+                            </div>
+                        </div>
+
+                        <div class="glass-card rounded-3xl border border-rose-100 dark:border-rose-900/30 overflow-hidden">
+                            <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-900/10" onclick="App.resetData()">
+                                <div class="flex items-center gap-3 text-rose-600">
+                                    <div class="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center">
+                                        <i class="ph-fill ph-warning text-xl"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Apagar tudo e Restaurar</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <p class="text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest mt-12">SaaS Gestão de Empréstimos v2.0</p>
+                    </div>
+                `;
+            },
+
+            openContract(id) {
+                const contract = this.state.contracts.find(c => c.id === id);
+                if (!contract) return;
+                
+                // Deep copy for local edits
+                this.state.activeContract = JSON.parse(JSON.stringify(contract));
+                this.renderContractModal('parcelas');
+            },
+
+            closeContractModal() {
+                const overlay = document.getElementById('overlay-root');
+                // Animate out
+                overlay.firstElementChild.classList.add('translate-y-full');
+                setTimeout(() => {
+                    overlay.innerHTML = '';
+                    this.state.activeContract = null;
+                }, 300);
+            },
+
+            saveActiveContract() {
+                const idx = this.state.contracts.findIndex(c => c.id === this.state.activeContract.id);
+                if (idx > -1) {
+                    this.state.contracts[idx] = this.state.activeContract;
+                } else {
+                    this.state.contracts.push(this.state.activeContract);
+                }
+                this.saveData();
+                this.closeContractModal();
+                // Refresh current view
+                if (this.state.tab === 'dashboard') this.renderDashboard();
+                if (this.state.tab === 'banks') this.renderBankContracts(this.state.activeContract.banco);
+                if (this.state.tab === 'calendar') this.renderCalendar();
+            },
+
+            renderContractModal(activeSubTab = 'parcelas') {
+                const overlay = document.getElementById('overlay-root');
+                const contract = this.state.activeContract;
+                
+                const totalOriginal = Number(contract.valorContrato) || (contract.parcelas * contract.valorParcela);
+                const pago = contract.installments.filter(i => i.status === 'paga').reduce((acc, i) => acc + Number(i.valorPago || i.valorEsperado), 0);
+                const restante = Math.max(0, totalOriginal - pago);
+                
+                const nextPending = contract.installments.find(i => i.status !== 'paga');
+
+                let contentHTML = '';
+
+                // --- TAB: PARCELAS ---
+                if (activeSubTab === 'parcelas') {
+                    let quickActionHTML = '';
+                    if (nextPending) {
+                        quickActionHTML = `
+                            <div onclick="App.toggleInstallment('${nextPending.id}', 'paga')" class="bg-emerald-500 rounded-3xl p-4 mb-6 shadow-lg shadow-emerald-500/20 text-white cursor-pointer active:scale-95 transition-transform flex items-center justify-between">
+                                <div>
+                                    <p class="text-xs text-emerald-100 font-bold uppercase tracking-wider mb-1">Pagar Próxima</p>
+                                    <p class="text-xl font-black">Parc. ${nextPending.numero}</p>
+                                </div>
+                                <div class="flex items-center gap-3 bg-white/20 px-4 py-2 rounded-2xl backdrop-blur-sm">
+                                    <span class="font-black">${Format.brl(nextPending.valorEsperado)}</span>
+                                    <i class="ph-fill ph-check-circle text-2xl"></i>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    const instHTML = contract.installments.map(inst => {
+                        const isPaid = inst.status === 'paga';
+                        const isLate = inst.status === 'atrasada';
+                        
+                        let cardClass = 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800';
+                        let numClass = 'bg-slate-100 dark:bg-slate-900 text-slate-500';
+                        let valClass = 'text-slate-900 dark:text-white';
+                        
+                        if (isPaid) {
+                            cardClass = 'opacity-50 bg-slate-50 dark:bg-slate-800/50 border-transparent';
+                            numClass = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600';
+                            valClass = 'text-slate-400 line-through';
+                        } else if (isLate) {
+                            cardClass = 'border-rose-200 bg-rose-50/50 dark:bg-rose-900/10 dark:border-rose-800';
+                            numClass = 'bg-rose-500 text-white shadow-md shadow-rose-500/30';
+                            valClass = 'text-rose-600 dark:text-rose-400';
+                        }
+
+                        const btnIcon = isPaid ? 'ph-arrow-u-up-left' : 'ph-check';
+                        const btnClass = isPaid 
+                            ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 hover:bg-slate-300' 
+                            : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 hover:bg-emerald-200';
+
+                        return `
+                            <div class="rounded-3xl p-4 flex items-center justify-between border-2 transition-all duration-200 mb-3 ${cardClass}">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${numClass}">
+                                        ${inst.numero}
+                                    </div>
+                                    <div>
+                                        <p class="font-black text-lg ${valClass}">${Format.brl(inst.valorEsperado)}</p>
+                                        <p class="text-xs font-medium ${isLate ? 'text-rose-500' : 'text-slate-400'}">
+                                            ${isLate ? 'Venceu: ' : 'Vence: '} ${Format.date(inst.vencimento)}
+                                        </p>
+                                        ${inst.isAbatimento ? '<span class="text-[9px] text-brand-500 font-bold uppercase tracking-wider block mt-1">Quitada no Abatimento</span>' : ''}
+                                    </div>
+                                </div>
+                                <button onclick="App.toggleInstallment('${inst.id}')" class="w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform ${btnClass}">
+                                    <i class="ph-bold ${btnIcon} text-xl"></i>
+                                </button>
+                            </div>
+                        `;
+                    }).join('');
+
+                    contentHTML = `<div>${quickActionHTML}${instHTML}</div>`;
+                }
+
+                // --- TAB: ABATIMENTO ---
+                if (activeSubTab === 'abatimento') {
+                    contentHTML = `
+                        <div class="space-y-4">
+                            <div class="glass-card rounded-3xl p-6 border-brand-100 dark:border-brand-900/30 shadow-glass">
+                                <div class="flex items-center gap-3 mb-4 text-brand-600 dark:text-brand-400">
+                                    <div class="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center"><i class="ph-fill ph-magic-wand text-xl"></i></div>
+                                    <h3 class="font-black text-lg">Simulador Inteligente</h3>
+                                </div>
+                                <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                                    Pague um valor extra agora para "matar" parcelas do fim do contrato (de trás para frente), reduzindo o prazo da sua dívida drasticamente.
+                                </p>
+                                
+                                <div class="mb-6">
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Valor do Lance/Abatimento</label>
+                                    <div class="relative">
+                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
+                                        <input type="number" id="valAbatimento" placeholder="0.00" class="w-full bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-xl font-black text-slate-900 dark:text-white outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20 transition-all">
+                                    </div>
+                                </div>
+                                
+                                <button onclick="App.applyAmortization()" class="w-full bg-slate-900 dark:bg-brand-600 text-white font-bold rounded-2xl py-4 shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2">
+                                    Aplicar Simulação <i class="ph-bold ph-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // --- TAB: DETALHES ---
+                if (activeSubTab === 'detalhes') {
+                    const lastInst = contract.installments[contract.installments.length - 1];
+                    const endDate = lastInst ? Format.date(lastInst.vencimento) : '-';
+
+                    contentHTML = `
+                        <div class="space-y-4">
+                            <div class="glass-card rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-glass">
+                                <h3 class="font-black text-lg text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                    <i class="ph-fill ph-chart-pie-slice text-brand-500"></i> Resumo do Contrato
+                                </h3>
+                                <div class="grid grid-cols-2 gap-4 mb-4">
+                                    <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Saldo Devedor</p>
+                                        <p class="font-black text-slate-800 dark:text-white">${Format.brl(restante)}</p>
+                                    </div>
+                                    <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Total Pago</p>
+                                        <p class="font-black text-emerald-600 dark:text-emerald-400">${Format.brl(pago)}</p>
+                                    </div>
+                                    <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Valor Original</p>
+                                        <p class="font-black text-slate-800 dark:text-white">${Format.brl(totalOriginal)}</p>
+                                    </div>
+                                    <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Quitação Prevista</p>
+                                        <p class="font-black text-slate-800 dark:text-white">${endDate}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="glass-card rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-glass space-y-4">
+                                <h3 class="font-black text-lg text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                                    <i class="ph-fill ph-file-text text-brand-500"></i> Dados e Observações
+                                </h3>
+                                
+                                <div>
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Banco / Credor</label>
+                                    <input type="text" value="${contract.banco || ''}" onchange="App.state.activeContract.banco = this.value" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-brand-500 transition-all">
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Nº Contrato</label>
+                                        <input type="text" value="${contract.contrato || ''}" onchange="App.state.activeContract.contrato = this.value" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-brand-500 transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Data Inicial</label>
+                                        <input type="text" value="${contract.data || ''}" disabled class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-sm font-semibold text-slate-500 outline-none">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Observações</label>
+                                    <textarea onchange="App.state.activeContract.obs = this.value" rows="3" placeholder="Anotações sobre este contrato..." class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-brand-500 transition-all resize-none">${contract.obs || ''}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const tabsHTML = ['parcelas', 'abatimento', 'detalhes'].map(tab => `
+                    <button onclick="App.renderContractModal('${tab}')" class="flex-1 py-4 text-sm font-bold capitalize transition-colors border-b-2 ${activeSubTab === tab ? 'border-slate-900 text-slate-900 dark:border-white dark:text-white' : 'border-transparent text-slate-400'}">
+                        ${tab}
+                    </button>
+                `).join('');
+
+                const html = `
+                    <div class="fixed inset-0 z-50 bg-white dark:bg-slate-900 flex flex-col transform translate-y-full transition-transform duration-400 ease-out page-enter" id="contract-view">
+                        <!-- Hero Header -->
+                        <div class="bg-slate-900 dark:bg-slate-950 pt-10 pb-6 px-5 text-white relative rounded-b-[40px] shadow-lg">
+                            <header class="flex items-center justify-between mb-8 relative z-10">
+                                <button onclick="App.closeContractModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all">
+                                    <i class="ph-bold ph-caret-down text-xl"></i>
+                                </button>
+                                <div class="text-center flex-1 px-4">
+                                    <h2 class="font-black text-lg truncate">${contract.banco}</h2>
+                                </div>
+                                <button onclick="App.saveActiveContract()" class="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/30 active:scale-95 transition-all">
+                                    <i class="ph-bold ph-check text-xl"></i>
+                                </button>
+                            </header>
+
+                            <div class="text-center relative z-10">
+                                <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Saldo Devedor Restante</p>
+                                <h1 class="text-5xl font-black mb-6 tracking-tighter">${Format.brl(restante)}</h1>
+                                
+                                <div class="flex justify-center gap-8 text-sm bg-black/20 rounded-3xl py-3 backdrop-blur-md border border-white/5 mx-4">
+                                    <div class="text-left">
+                                        <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-1">Progresso</span> 
+                                        <span class="font-bold">${((pago/totalOriginal)*100).toFixed(0)}%</span>
+                                    </div>
+                                    <div class="w-px bg-white/10"></div>
+                                    <div class="text-left">
+                                        <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-1">Total Original</span> 
+                                        <span class="font-bold">${Format.brl(totalOriginal)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sticky Tabs -->
+                        <div class="flex px-5 sticky shadow-sm z-20 bg-white dark:bg-slate-900" style="top:0">
+                            ${tabsHTML}
+                        </div>
+
+                        <!-- Content Scroll -->
+                        <div class="flex-1 overflow-y-auto px-5 py-6 no-scrollbar bg-[#f8fafc] dark:bg-slate-900">
+                            ${contentHTML}
+                        </div>
+                    </div>
+                `;
+
+                overlay.innerHTML = html;
+                // Force layout recalculation to run transition if we are just opening it
+                requestAnimationFrame(() => {
+                    const el = document.getElementById('contract-view');
+                    if(el) el.classList.remove('translate-y-full');
+                });
+            },
+
+            toggleInstallment(id, forceStatus = null) {
+                const updated = this.state.activeContract.installments.map(i => {
+                    if (i.id === id) {
+                        const newStatus = forceStatus ? forceStatus : (i.status === 'paga' ? 'pendente' : 'paga');
+                        return { 
+                            ...i, 
+                            status: newStatus, 
+                            valorPago: newStatus === 'paga' ? i.valorEsperado : 0, 
+                            dataPagamento: newStatus === 'paga' ? new Date().toISOString() : null,
+                            isAbatimento: newStatus === 'paga' ? i.isAbatimento : false // clear flag if unchecking
+                        };
+                    }
+                    return i;
+                });
+                this.state.activeContract.installments = updated;
+                this.renderContractModal('parcelas'); // re-render inner modal
+            },
+
+            applyAmortization() {
+                const input = document.getElementById('valAbatimento');
+                const amount = Number(input.value);
+                
+                if (!amount || amount <= 0) {
+                    this.showDialog({ title: 'Atenção', message: 'Digite um valor válido para simular.', type: 'danger' });
+                    return;
+                }
+
+                let remainingToApply = amount;
+                const updatedInst = [...this.state.activeContract.installments].reverse(); // De trás pra frente
+                let parcelsKilled = 0;
+                
+                for (let i = 0; i < updatedInst.length; i++) {
+                    let inst = updatedInst[i];
+                    if (inst.status !== 'paga' && remainingToApply > 0) {
+                        const debt = Number(inst.valorEsperado) - (Number(inst.valorPago) || 0);
+                        if (remainingToApply >= debt) {
+                            inst.status = 'paga';
+                            inst.valorPago = Number(inst.valorEsperado);
+                            inst.dataPagamento = new Date().toISOString();
+                            inst.isAbatimento = true; 
+                            remainingToApply -= debt;
+                            parcelsKilled++;
+                        } else {
+                            inst.valorEsperado = Number(inst.valorEsperado) - remainingToApply;
+                            remainingToApply = 0;
+                        }
+                    }
+                }
+                
+                this.state.activeContract.installments = updatedInst.reverse();
+                
+                this.showDialog({
+                    title: 'Simulação Aplicada! 🎉',
+                    message: `Com ${Format.brl(amount)}, você antecipou e matou ${parcelsKilled} parcela(s) do fim do contrato.\n\nClique no botão "Check" verde lá em cima para salvar definitivamente.`,
+                    type: 'success',
+                    onConfirm: () => { this.renderContractModal('parcelas'); } // go back to parcels view
+                });
+            },
+
+            // --- System Methods ---
+            exportData() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state.contracts));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "saas_emprestimos_backup.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            },
+
+            resetData() {
+                this.showDialog({
+                    title: 'Atenção, Risco Analítico!',
+                    message: 'Tem certeza que deseja apagar todos os seus controles atuais e voltar aos dados de demonstração?',
+                    type: 'danger',
+                    confirmText: 'Sim, Apagar Tudo',
+                    cancelText: 'Cancelar',
+                    onConfirm: () => {
+                        this.state.contracts = this.generateSeedData();
+                        this.saveData();
+                        this.navigate('dashboard');
+                    }
+                });
+            },
+
+            generateSeedData() {
+                const baseContracts = [
+                    {"contrato": "25-012458016/23", "parcelas": 120, "banco": "BANCO DAYCOVAL", "produto": "EMPRESTIMO", "data": "11/01/2023", "situacao": "Ativo", "valorContrato": 15057.63, "valorParcela": 341.57},
+                    {"contrato": "20-013927369/23", "parcelas": 96, "banco": "BANCO DAYCOVAL", "produto": "EMPRESTIMO", "data": "09/06/2023", "situacao": "Ativo", "valorContrato": 2402.42, "valorParcela": 67.3},
+                    {"contrato": "600324197", "parcelas": 36, "banco": "BANCO INDUSTRIAL DO BRASIL", "produto": "EMPRESTIMO", "data": "13/03/2026", "situacao": "Ativo", "valorContrato": 6624.0, "valorParcela": 184.0},
+                    {"contrato": "110893110054939640", "parcelas": 120, "banco": "CAIXA ECONOMICA", "produto": "EMPRESTIMO", "data": "15/03/2022", "situacao": "Ativo", "valorContrato": 4000.0, "valorParcela": 89.74},
+                    {"contrato": "119780199", "parcelas": 120, "banco": "SANTANDER", "produto": "EMPRESTIMO", "data": "17/12/2020", "situacao": "Ativo", "valorContrato": 9527.64, "valorParcela": 171.29},
+                    {"contrato": "570200684", "parcelas": 107, "banco": "SANTANDER", "produto": "EMPRESTIMO", "data": "18/07/2022", "situacao": "Ativo", "valorContrato": 8738.02, "valorParcela": 158.18},
+                    {"contrato": "879653710", "parcelas": 99, "banco": "SANTANDER", "produto": "CARTÃO CONSIGNADO", "data": "11/01/2024", "situacao": "Ativo", "valorContrato": 1700.0, "valorParcela": 303.0}
+                ];
+
+                return baseContracts.map(c => {
+                    const startDate = Parse.dateBR(c.data);
+                    const installments = [];
+                    const hoje = new Date();
+                    const diffMeses = (hoje.getFullYear() - startDate.getFullYear()) * 12 + (hoje.getMonth() - startDate.getMonth());
+                    
+                    let paidCount = Math.max(0, diffMeses); 
+
+                    for (let i = 1; i <= c.parcelas; i++) {
+                        const dueDate = new Date(startDate);
+                        dueDate.setMonth(dueDate.getMonth() + i);
+                        
+                        let status = 'pendente';
+                        if (i <= paidCount) status = 'paga';
+                        else if (dueDate < hoje && status !== 'paga') status = 'atrasada';
+
+                        installments.push({
+                            id: Format.id(),
+                            numero: i,
+                            vencimento: dueDate.toISOString(),
+                            valorEsperado: c.valorParcela,
+                            valorPago: status === 'paga' ? c.valorParcela : 0,
+                            status: status,
+                            dataPagamento: status === 'paga' ? dueDate.toISOString() : null,
+                            isAbatimento: false
+                        });
+                    }
+                    return { id: Format.id(), ...c, installments };
+                });
+            }
+        };
+
+        window.onload = () => App.init();
+    </script>
+</body>
+</html>
