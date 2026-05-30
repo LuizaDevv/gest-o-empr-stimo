@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gestão de Empréstimos SaaS</title>
     
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0d9488">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Empréstimos">
+    <link rel="apple-touch-icon" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230d9488' rx='100'/%3E%3Cpath fill='%23fff' d='M256 128c-70.7 0-128 57.3-128 128s57.3 128 128 128 128-57.3 128-128-57.3-128-128-128zm0 216c-48.6 0-88-39.4-88-88s39.4-88 88-88 88 39.4 88 88-39.4 88-88 88z'/%3E%3C/svg%3E">
+    <link rel="manifest" id="pwa-manifest">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -110,6 +118,36 @@
     <div id="overlay-root"></div>
 
     <script>
+        // --- PWA Logic ---
+        let deferredPrompt;
+        
+        const setupPWA = () => {
+            const manifest = {
+                name: "Gestão de Empréstimos SaaS",
+                short_name: "Empréstimos",
+                start_url: window.location.href,
+                display: "standalone",
+                background_color: "#f8fafc",
+                theme_color: "#0d9488",
+                icons: [{
+                    src: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230d9488' rx='100'/%3E%3Cpath fill='%23fff' d='M256 128c-70.7 0-128 57.3-128 128s57.3 128 128 128 128-57.3 128-128-57.3-128-128-128zm0 216c-48.6 0-88-39.4-88-88s39.4-88 88-88 88 39.4 88 88-39.4 88-88 88z'/%3E%3C/svg%3E",
+                    sizes: "512x512",
+                    type: "image/svg+xml",
+                    purpose: "any maskable"
+                }]
+            };
+            const manifestStr = JSON.stringify(manifest);
+            const manifestUrl = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(manifestStr);
+            document.getElementById('pwa-manifest').setAttribute('href', manifestUrl);
+        };
+        setupPWA();
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (App && App.state && App.state.tab === 'settings') App.renderSettings();
+        });
+
         // --- Utility Functions ---
         const Format = {
             brl: (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
@@ -186,6 +224,17 @@
                 this.applyTheme();
                 this.renderSettings(); // Re-render to update toggle switch
                 if(this.state.tab === 'dashboard') this.renderDashboard(); // Update chart colors
+            },
+
+            async installPWA() {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        deferredPrompt = null;
+                        if (this.state.tab === 'settings') this.renderSettings();
+                    }
+                }
             },
 
             // Custom replacement for window.confirm/alert
@@ -328,7 +377,9 @@
                     }
                 });
 
-                return { totalRestante, totalPago, compromissoMes, parcelasAtrasadas, livreDateStr, timeline, prioritario };
+                const totalOriginal = totalPago + totalRestante;
+
+                return { totalRestante, totalPago, totalOriginal, compromissoMes, parcelasAtrasadas, livreDateStr, timeline, prioritario };
             },
 
             renderDashboard() {
@@ -364,7 +415,7 @@
                 }
 
                 container.innerHTML = `
-                    <div class="p-5 pt-8 page-enter">
+                    <div class="p-5 pt-8">
                         <header class="mb-6 flex justify-between items-end">
                             <div>
                                 <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Dashboard</h1>
@@ -377,9 +428,20 @@
 
                         <!-- Main KPI Widget -->
                         <div class="glass-card rounded-3xl p-6 mb-4 shadow-glass dark:shadow-none border-t-4 border-t-brand-500">
-                            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Saldo Devedor Total</p>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Falta Pagar (Saldo Devedor)</p>
                             <h2 class="text-4xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">${Format.brl(insights.totalRestante)}</h2>
                             
+                            <div class="grid grid-cols-2 gap-3 mb-4">
+                                <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                    <p class="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Já Pago</p>
+                                    <p class="text-sm font-bold text-emerald-600 dark:text-emerald-400">${Format.brl(insights.totalPago)}</p>
+                                </div>
+                                <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                    <p class="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Total de Tudo</p>
+                                    <p class="text-sm font-bold text-slate-800 dark:text-white">${Format.brl(insights.totalOriginal)}</p>
+                                </div>
+                            </div>
+
                             <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-100 dark:border-slate-700">
                                 <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
                                     <i class="ph-fill ph-calendar-check text-xl"></i>
@@ -555,7 +617,7 @@
                 }
 
                 container.innerHTML = `
-                    <div class="p-5 pt-8 page-enter">
+                    <div class="p-5 pt-8">
                         <header class="mb-6">
                             <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Meus Bancos</h1>
                             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Organizado por instituição</p>
@@ -608,7 +670,7 @@
                 }).join('');
 
                 container.innerHTML = `
-                    <div class="p-5 pt-8 page-enter">
+                    <div class="p-5 pt-8">
                         <header class="mb-6 flex items-center gap-4">
                             <button onclick="App.renderBanks()" class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-95 transition-transform">
                                 <i class="ph ph-arrow-left text-xl"></i>
@@ -681,7 +743,7 @@
                 });
 
                 container.innerHTML = `
-                    <div class="p-5 pt-8 page-enter">
+                    <div class="p-5 pt-8">
                         <header class="mb-4">
                             <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Timeline</h1>
                             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Sua agenda de pagamentos</p>
@@ -695,11 +757,34 @@
 
             renderSettings() {
                 const container = document.getElementById('app-content');
+                
+                let installHTML = '';
+                if (typeof deferredPrompt !== 'undefined' && deferredPrompt !== null) {
+                    installHTML = `
+                        <div class="glass-card rounded-3xl overflow-hidden mb-6 border border-brand-200 dark:border-brand-900/50 shadow-glass">
+                            <div class="p-4 flex justify-between items-center cursor-pointer bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/20 dark:hover:bg-brand-900/40 transition-colors" onclick="App.installPWA()">
+                                <div class="flex items-center gap-3 text-brand-700 dark:text-brand-300">
+                                    <div class="w-10 h-10 rounded-xl bg-brand-200/50 dark:bg-brand-800/50 flex items-center justify-center">
+                                        <i class="ph-fill ph-device-mobile text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <span class="font-bold text-sm block">Instalar App no Celular</span>
+                                        <span class="text-[10px] opacity-75 font-medium block">Adicionar à tela inicial</span>
+                                    </div>
+                                </div>
+                                <i class="ph-bold ph-download-simple text-brand-600 dark:text-brand-400 text-xl"></i>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 container.innerHTML = `
-                    <div class="p-5 pt-8 page-enter">
+                    <div class="p-5 pt-8">
                         <header class="mb-8">
                             <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Ajustes</h1>
                         </header>
+
+                        ${installHTML}
 
                         <div class="glass-card rounded-3xl overflow-hidden mb-6 divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800">
                             <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onclick="App.toggleTheme()">
@@ -949,7 +1034,7 @@
                 `).join('');
 
                 const html = `
-                    <div class="fixed inset-0 z-50 bg-white dark:bg-slate-900 flex flex-col transform translate-y-full transition-transform duration-400 ease-out page-enter" id="contract-view">
+                    <div class="fixed inset-0 z-50 bg-white dark:bg-slate-900 flex flex-col transform translate-y-full transition-transform duration-400 ease-out" id="contract-view">
                         <!-- Hero Header -->
                         <div class="bg-slate-900 dark:bg-slate-950 pt-10 pb-6 px-5 text-white relative rounded-b-[40px] shadow-lg">
                             <header class="flex items-center justify-between mb-8 relative z-10">
