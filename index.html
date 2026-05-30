@@ -194,7 +194,7 @@
             },
 
             loadData() {
-                const stored = localStorage.getItem('saas_emprestimos_data');
+                const stored = localStorage.getItem('saas_emprestimos_data_v2');
                 const theme = localStorage.getItem('saas_theme_dark');
                 this.state.darkMode = theme === 'true';
 
@@ -207,7 +207,7 @@
             },
 
             saveData() {
-                localStorage.setItem('saas_emprestimos_data', JSON.stringify(this.state.contracts));
+                localStorage.setItem('saas_emprestimos_data_v2', JSON.stringify(this.state.contracts));
             },
 
             applyTheme() {
@@ -224,6 +224,45 @@
                 this.applyTheme();
                 this.renderSettings(); // Re-render to update toggle switch
                 if(this.state.tab === 'dashboard') this.renderDashboard(); // Update chart colors
+            },
+
+            payAllThisMonth() {
+                const now = new Date();
+                const currentMonth = now.getMonth();
+                const currentYear = now.getFullYear();
+                let count = 0;
+                
+                this.state.contracts.forEach(c => {
+                    c.installments.forEach(inst => {
+                        const dueDate = new Date(inst.vencimento);
+                        if (dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear && inst.status !== 'paga') {
+                            inst.status = 'paga';
+                            inst.valorPago = inst.valorEsperado;
+                            inst.dataPagamento = now.toISOString();
+                            inst.isAbatimento = false;
+                            count++;
+                        }
+                    });
+                });
+                
+                if (count > 0) {
+                    this.saveData();
+                    this.showDialog({
+                        title: 'Sucesso!',
+                        message: `${count} parcela(s) deste mês foram marcadas como pagas!`,
+                        type: 'success',
+                        onConfirm: () => {
+                            if (this.state.tab === 'dashboard') this.renderDashboard();
+                            if (this.state.tab === 'calendar') this.renderCalendar();
+                        }
+                    });
+                } else {
+                    this.showDialog({
+                        title: 'Tudo em dia',
+                        message: 'Você não tem parcelas pendentes para o mês atual.',
+                        type: 'info'
+                    });
+                }
             },
 
             async installPWA() {
@@ -473,6 +512,10 @@
                             </div>
                         </div>
 
+                        <button onclick="App.payAllThisMonth()" class="w-full bg-brand-50 hover:bg-brand-100 text-brand-700 dark:bg-brand-900/20 dark:hover:bg-brand-900/40 dark:text-brand-300 font-bold rounded-2xl py-3.5 mb-6 transition-colors flex justify-center items-center gap-2 shadow-sm border border-brand-100 dark:border-brand-900/50 active:scale-95">
+                            <i class="ph-bold ph-check-double text-lg"></i> Pagar todas as parcelas deste mês
+                        </button>
+
                         ${priorityHTML}
                         ${chartHTML}
                     </div>
@@ -579,12 +622,17 @@
                 // Agrupar por banco
                 const grouped = {};
                 this.state.contracts.forEach(c => {
-                    if (!grouped[c.banco]) grouped[c.banco] = { count: 0, debt: 0, name: c.banco };
+                    if (!grouped[c.banco]) grouped[c.banco] = { count: 0, debt: 0, name: c.banco, quitados: 0 };
                     grouped[c.banco].count++;
                     
-                    const pago = c.installments.filter(i => i.status === 'paga').reduce((acc, i) => acc + Number(i.valorPago || i.valorEsperado), 0);
-                    const total = Number(c.valorContrato) || (c.parcelas * c.valorParcela);
-                    grouped[c.banco].debt += Math.max(0, total - pago);
+                    const isQuitado = c.installments.every(i => i.status === 'paga');
+                    if (isQuitado) {
+                        grouped[c.banco].quitados++;
+                    }
+                    
+                    // O saldo devedor é a soma das parcelas pendentes
+                    const debt = c.installments.filter(i => i.status !== 'paga').reduce((acc, i) => acc + Number(i.valorEsperado), 0);
+                    grouped[c.banco].debt += debt;
                 });
 
                 const banks = Object.values(grouped).sort((a, b) => b.debt - a.debt); // Sort by highest debt
@@ -638,13 +686,16 @@
                     const paidInst = c.installments.filter(i => i.status === 'paga').length;
                     const hasOverdue = c.installments.some(i => i.status === 'atrasada');
                     const progress = (paidInst / totalInst) * 100;
+                    const isQuitado = paidInst === totalInst;
 
                     let badge = `<span class="bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">Em Dia</span>`;
                     if (hasOverdue) badge = `<span class="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">Atrasado</span>`;
-                    if (paidInst === totalInst) badge = `<span class="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">Quitado</span>`;
+                    if (isQuitado) badge = `<span class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">Finalizado</span>`;
+
+                    const cardOpacity = isQuitado ? 'opacity-60 bg-slate-50 dark:bg-slate-800/40' : 'bg-white dark:bg-slate-800';
 
                     return `
-                        <div onclick="App.openContract('${c.id}')" class="glass-card p-5 rounded-3xl shadow-sm mb-4 cursor-pointer hover:border-brand-300 transition-colors active:scale-[0.98] border border-slate-100 dark:border-slate-800">
+                        <div onclick="App.openContract('${c.id}')" class="glass-card p-5 rounded-3xl shadow-sm mb-4 cursor-pointer hover:border-brand-300 transition-colors active:scale-[0.98] border border-slate-100 dark:border-slate-800 ${cardOpacity}">
                             <div class="flex justify-between items-start mb-4">
                                 <div>
                                     <h3 class="font-bold text-slate-900 dark:text-white leading-tight">${c.produto || 'Empréstimo'}</h3>
@@ -864,11 +915,15 @@
                 const overlay = document.getElementById('overlay-root');
                 const contract = this.state.activeContract;
                 
-                const totalOriginal = Number(contract.valorContrato) || (contract.parcelas * contract.valorParcela);
+                // O valor original deve refletir parcelas * valorParcela (incluindo juros/taxas)
+                const totalOriginal = contract.parcelas * contract.valorParcela;
                 const pago = contract.installments.filter(i => i.status === 'paga').reduce((acc, i) => acc + Number(i.valorPago || i.valorEsperado), 0);
-                const restante = Math.max(0, totalOriginal - pago);
+                
+                // O saldo devedor restante é a soma das parcelas pendentes
+                const restante = contract.installments.filter(i => i.status !== 'paga').reduce((acc, i) => acc + Number(i.valorEsperado), 0);
                 
                 const nextPending = contract.installments.find(i => i.status !== 'paga');
+                const isQuitado = contract.installments.every(i => i.status === 'paga');
 
                 let contentHTML = '';
 
@@ -1050,6 +1105,7 @@
                             </header>
 
                             <div class="text-center relative z-10">
+                                ${isQuitado ? '<span class="inline-block bg-emerald-500 text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3 shadow-lg shadow-emerald-500/30">Contrato Finalizado</span>' : ''}
                                 <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Saldo Devedor Restante</p>
                                 <h1 class="text-5xl font-black mb-6 tracking-tighter">${Format.brl(restante)}</h1>
                                 
@@ -1178,8 +1234,10 @@
                     {"contrato": "20-013927369/23", "parcelas": 96, "banco": "BANCO DAYCOVAL", "produto": "EMPRESTIMO", "data": "09/06/2023", "situacao": "Ativo", "valorContrato": 2402.42, "valorParcela": 67.3},
                     {"contrato": "600324197", "parcelas": 36, "banco": "BANCO INDUSTRIAL DO BRASIL", "produto": "EMPRESTIMO", "data": "13/03/2026", "situacao": "Ativo", "valorContrato": 6624.0, "valorParcela": 184.0},
                     {"contrato": "110893110054939640", "parcelas": 120, "banco": "CAIXA ECONOMICA", "produto": "EMPRESTIMO", "data": "15/03/2022", "situacao": "Ativo", "valorContrato": 4000.0, "valorParcela": 89.74},
+                    {"contrato": "1,10893E+17", "parcelas": 60, "banco": "CAIXA ECONOMICA", "produto": "EMPRESTIMO", "data": "22/01/2021", "situacao": "Pendente de baixa", "valorContrato": 6380.25, "valorParcela": 102.0},
                     {"contrato": "119780199", "parcelas": 120, "banco": "SANTANDER", "produto": "EMPRESTIMO", "data": "17/12/2020", "situacao": "Ativo", "valorContrato": 9527.64, "valorParcela": 171.29},
                     {"contrato": "570200684", "parcelas": 107, "banco": "SANTANDER", "produto": "EMPRESTIMO", "data": "18/07/2022", "situacao": "Ativo", "valorContrato": 8738.02, "valorParcela": 158.18},
+                    {"contrato": "612929876", "parcelas": 120, "banco": "SANTANDER", "produto": "EMPRESTIMO", "data": "14/02/2023", "situacao": "Ativo", "valorContrato": 1166.25, "valorParcela": 22.0},
                     {"contrato": "879653710", "parcelas": 99, "banco": "SANTANDER", "produto": "CARTÃO CONSIGNADO", "data": "11/01/2024", "situacao": "Ativo", "valorContrato": 1700.0, "valorParcela": 303.0}
                 ];
 
